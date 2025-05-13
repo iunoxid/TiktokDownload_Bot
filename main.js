@@ -286,7 +286,7 @@ https://vt.tiktok.com/ZS2qsMU1W/
 现在**仅**发送有效的TikTok链接！`,
       strict_link_only: `
 抱歉，您必须**仅**发送TikTok链接，不带额外文本，例如：
-https://vt.t JESUSiktok.com/ZS2qsMU1W/
+https://vt.tiktok.com/ZS2qsMU1W/
 不要在链接前后添加文本。
 
 📌 *如何修复*：
