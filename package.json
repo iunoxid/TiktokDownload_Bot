@@ -4,11 +4,11 @@
   "description": "Simple Telegram Bot TikTok Downloader.",
   "main": "index.js",
   "scripts": {
-    "start": "nodemon index.js",
-    "start:prod": "node index.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js"
   },
   "author": "Tio",
-  "license": "ISC",
+  "license": "MIT",
   "engines": {
     "node": "18.x"
   },
