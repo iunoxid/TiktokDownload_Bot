@@ -2,9 +2,12 @@
 
 A simple Telegram bot that allows users to download TikTok videos, photos, and audio directly from Telegram using the Telegram Bot API and TikTok API. It features an AI assistant that guides users through the downloading process and answers inquiries, enhancing the overall experience.
 
+## Links
 #### [Try Demo](https://t.me/tikdl_tele_bot)
 
 #### [Docs API](https://openai.idnet.my.id/docs)
+
+#### [ChatGPT Free](https://openai.idnet.my.id)
 
 
 ## Installation
