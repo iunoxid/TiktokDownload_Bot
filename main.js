@@ -270,7 +270,7 @@ https://vt.tiktok.com/ZS2qsMU1W/
 - 不要在链接前后添加文本。
 - 如有问题，我会帮助解决！
 
-现在**仅**发送TikTok链接！ освободите选择语言：*id*、*en* 或 *zh*`,
+现在**仅**发送TikTok链接！或选择语言：*id*、*en* 或 *zh*`,
       runtime: '🕒 机器人已运行：{hours}小时，{minutes}分钟，{seconds}秒。',
       invalid_url: `
 抱歉，您发送的链接不是有效的TikTok链接。请确保链接来自TikTok，例如：
