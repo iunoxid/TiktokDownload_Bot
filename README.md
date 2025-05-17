@@ -4,6 +4,9 @@ A simple Telegram bot that allows users to download TikTok videos, photos, and a
 
 #### [Try Demo](https://t.me/tikdl_tele_bot)
 
+#### [Docs API](https://openai.idnet.my.id/docs)
+
+
 ## Installation
 
 To get started with the Telegram Bot Tiktok Downloader, follow the steps below:
