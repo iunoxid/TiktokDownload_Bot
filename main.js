@@ -11,13 +11,18 @@ let Start = new Date();
 const userLanguage = {};
 const conversationHistory = {};
 
-// Baner
+// Fungsi untuk cek private chat
+const isPrivateChat = (msg) => {
+  return msg.chat.type === 'private';
+};
+
+// Banner
 const displayBanner = () => {
   console.log(chalk.yellow.bold('TikTok Downloader Bot with Enhanced AI Assistant'));
   console.log(chalk.cyan('========================================'));
 };
 
-// Loggs
+// Logs
 const logs = (type, message, details = {}) => {
   const timestamp = new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' });
   let color, prefix;
@@ -339,14 +344,17 @@ const getMainKeyboard = () => ({
   },
 });
 
-// AI Request
+// AI Request sesuai AI_SYSTEM_PROMPT
 async function queryAI(chatId, userMessage, lang = 'id') {
   try {
     if (!conversationHistory[chatId]) {
       conversationHistory[chatId] = [
         {
           role: 'system',
-          content: `${AI_SYSTEM_PROMPT} Respond in ${lang === 'id' ? 'Indonesian' : lang === 'en' ? 'English' : 'Chinese'}.`,
+          content: `
+${AI_SYSTEM_PROMPT}
+Respond in ${lang === 'id' ? 'Indonesian' : lang === 'en' ? 'English' : 'Chinese'} with a fun, engaging, and professional tone as a TikTok Downloader Bot assistant. Use emojis to make responses lively, but stay strictly focused on TikTok downloading, features, or commands. If the user asks unrelated questions, redirect politely to TikTok topics, emphasizing the link-only rule or bot features.
+`,
         },
       ];
     }
@@ -375,7 +383,7 @@ async function queryAI(chatId, userMessage, lang = 'id') {
           'User-Agent': `TeleBot/${version}`,
           accept: 'application/json',
         },
-        timeout: 60000, 
+        timeout: 60000,
       }
     );
 
@@ -416,7 +424,10 @@ bot.on('callback_query', async (query) => {
         newText = getMessage(newLang, 'start');
         newMarkup = getMainKeyboard();
         if (conversationHistory[chatId]) {
-          conversationHistory[chatId][0].content = `${AI_SYSTEM_PROMPT} Respond in ${newLang === 'id' ? 'Indonesian' : newLang === 'en' ? 'English' : 'Chinese'}.`;
+          conversationHistory[chatId][0].content = `
+${AI_SYSTEM_PROMPT}
+Respond in ${newLang === 'id' ? 'Indonesian' : newLang === 'en' ? 'English' : 'Chinese'} with a fun, engaging, and professional tone as a TikTok Downloader Bot assistant. Use emojis to make responses lively, but stay strictly focused on TikTok downloading, features, or commands. If the user asks unrelated questions, redirect politely to TikTok topics, emphasizing the link-only rule or bot features.
+`;
         }
         logs('info', 'Language changed', { ChatID: chatId, Language: newLang });
       }
@@ -527,6 +538,7 @@ bot.onText(/^\/runtime$/, async (msg) => {
   }
 });
 
+// Penanganan pesan: Grup cuma terima command dan link TikTok, AI hanya di private
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const text = msg.text || '(no text)';
@@ -556,17 +568,23 @@ bot.on('message', async (msg) => {
         await bot.sendMessage(chatId, getMessage(lang, 'processing_error'), { parse_mode: 'Markdown' });
       }
     } else if (!text.startsWith('/')) {
-      if (isStrictTikTokUrl) {
-        await bot.sendMessage(chatId, getMessage(lang, 'strict_link_only'), { parse_mode: 'Markdown' });
-        logs('warning', 'Message contains extra text with TikTok URL', { ChatID: chatId, Text: text });
+      if (isPrivateChat(msg)) {
+        if (isStrictTikTokUrl) {
+          await bot.sendMessage(chatId, getMessage(lang, 'strict_link_only'), { parse_mode: 'Markdown' });
+          logs('warning', 'Message contains extra text with TikTok URL', { ChatID: chatId, Text: text });
+        } else {
+          const ai_response = await queryAI(chatId, text, lang);
+          await bot.sendMessage(chatId, ai_response, { parse_mode: 'Markdown' });
+          logs('info', 'AI handled text message', {
+            ChatID: chatId,
+            Query: text.slice(0, 50),
+            Response: ai_response.slice(0, 50),
+          });
+        }
       } else {
-        const ai_response = await queryAI(chatId, text, lang);
-        await bot.sendMessage(chatId, ai_response, { parse_mode: 'Markdown' });
-        logs('info', 'AI handled text message', {
-          ChatID: chatId,
-          Query: text.slice(0, 50),
-          Response: ai_response.slice(0, 50),
-        });
+        // Di grup, abaikan pesan non-command dan non-link TikTok tanpa balasan
+        logs('warning', 'Non-command/non-TikTok message in group ignored', { ChatID: chatId, Text: text });
+        return;
       }
     }
   } catch (error) {
