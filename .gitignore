@@ -1,0 +1,40 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+.npm/
+.npmrc # Opsional, jika Anda menyimpan konfigurasi npm lokal yang sensitif
+
+# Build artifacts
+dist/
+build/
+*.tsbuildinfo
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Temporary files and directories
+tmp/ # Folder sementara yang kita gunakan untuk audio
+*.tmp
+*.log
+*.sqlite
+.DS_Store # macOS specific
+Thumbs.db # Windows specific
+.vscode/ # Visual Studio Code settings (opsional, bisa di-commit jika tim menggunakannya)
+
+# Data files
+data/data.json # File data persisten yang dibuat oleh bot
+
+# IDE specific files
+.idea/ # IntelliJ IDEA specific
+*.sublime-project
+*.sublime-workspace
+
+# Other specific files you might want to ignore
+*.zip
+*.tar.gz
+*.rar
