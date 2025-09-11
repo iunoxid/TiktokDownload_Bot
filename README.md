@@ -51,7 +51,7 @@ Anda bisa mencoba bot ini langsung di Telegram:
 
 #### Kloning Repositori
 ```bash
-git clone https://github.com/iunoo/Tiktok_Downloader.git
+git clone https://github.com/iunoin/Tiktok_Downloader.git
 cd Tiktok_Downloader
 ```
 
