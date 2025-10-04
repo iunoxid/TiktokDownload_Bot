@@ -38,7 +38,7 @@ Bot ini merupakan pengembangan dari proyek sumber terbuka, dengan fokus pada **m
 ## 🚀 Coba Sekarang!
 
 Anda bisa mencoba bot ini langsung di Telegram:  
-**[Link](t.me/iunoDownloadSocmed_bot)**
+**[Link](https://t.me/iunoDownloadSocmed_bot)**
 > *(Ganti dengan tautan bot Telegram Anda setelah deploy)*
 
 ---
