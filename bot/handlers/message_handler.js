@@ -1,6 +1,7 @@
 // bot/handlers/message_handler.js
 const axios = require('axios');
-const { MAX_USER_INPUT_LENGTH, DEFAULT_TIMEOUT, AI_REQUEST_TIMEOUT } = require('../../config/constants');
+const { MAX_USER_INPUT_LENGTH, DEFAULT_TIMEOUT, AI_REQUEST_TIMEOUT, MAX_DOWNLOAD_RETRIES, MAX_AI_RETRIES, DOWNLOAD_TIMEOUT } = require('../../config/constants');
+const { retryWithBackoff } = require('../../utils/retry_utils');
 
 // Configure axios defaults for better error handling and timeouts
 const axiosConfig = {
@@ -31,7 +32,9 @@ const sanitizeInput = (input) => {
 const queryAI = async (bot, chatId, userMessage, lang) => {
   if (!GROQ_API_KEY) {
     logs('error', 'Groq API Key is not set.', { ChatID: chatId });
-    await bot.sendMessage(chatId, getLocalizedMessage(lang, 'ai_error_fallback', MESSAGES), { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, getLocalizedMessage(lang, 'ai_error_fallback', MESSAGES), { parse_mode: 'Markdown' }).catch(e =>
+      logs('error', 'Failed to send AI error message', { ChatID: chatId, Error: e.message })
+    );
     return;
   }
 
@@ -57,27 +60,66 @@ const queryAI = async (bot, chatId, userMessage, lang) => {
     }
     setConversationHistory(chatId, currentHistory);
 
-    const response = await httpClient.post(
-      AI_API_URL,
-      { messages: currentHistory, model: GROQ_MODEL_NAME },
-      { 
-        headers: { 'Authorization': `Bearer ${GROQ_API_KEY}` },
-        timeout: AI_REQUEST_TIMEOUT
-      }
+    // Use retry mechanism for AI API calls
+    const response = await retryWithBackoff(
+      async () => {
+        return await httpClient.post(
+          AI_API_URL,
+          { messages: currentHistory, model: GROQ_MODEL_NAME },
+          {
+            headers: { 'Authorization': `Bearer ${GROQ_API_KEY}` },
+            timeout: AI_REQUEST_TIMEOUT
+          }
+        );
+      },
+      MAX_AI_RETRIES,
+      1500, // 1.5 second base delay for AI (faster than downloads)
+      'AI API Request'
     );
+
+    // Validate response structure before accessing
+    if (!response.data || !response.data.choices || !response.data.choices[0] || !response.data.choices[0].message) {
+      throw new Error('Invalid API response structure');
+    }
+
     const ai_response = response.data.choices[0].message.content;
+
+    if (!ai_response || typeof ai_response !== 'string') {
+      throw new Error('Invalid AI response content');
+    }
+
     currentHistory.push({ role: 'assistant', content: ai_response });
-    
+
     // Ensure history doesn't exceed limits after adding assistant response
     if (currentHistory.length > maxHistoryItems) {
       currentHistory = [currentHistory[0], ...currentHistory.slice(-AI_CHAT_HISTORY_LIMIT * 2)];
     }
-    
+
     setConversationHistory(chatId, currentHistory);
-    await bot.sendMessage(chatId, ai_response, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, ai_response, { parse_mode: 'Markdown' }).catch(async (sendError) => {
+      // Fallback: try sending without markdown if parsing fails
+      logs('warning', 'Failed to send with Markdown, retrying as plain text', { ChatID: chatId });
+      await bot.sendMessage(chatId, ai_response).catch(e =>
+        logs('error', 'Failed to send AI response completely', { ChatID: chatId, Error: e.message })
+      );
+    });
   } catch (error) {
-    logs('error', 'AI API request failed', { ChatID: chatId, Error: error.message });
-    await bot.sendMessage(chatId, getLocalizedMessage(lang, 'ai_error_fallback', MESSAGES), { parse_mode: 'Markdown' });
+    // Enhanced error logging with more details
+    const errorDetails = {
+      ChatID: chatId,
+      Error: error.message,
+      ErrorCode: error.code,
+      StatusCode: error.response?.status,
+      ResponseData: error.response?.data ? JSON.stringify(error.response.data).substring(0, 200) : 'N/A'
+    };
+
+    logs('error', 'AI API request failed', errorDetails);
+    trackError('ai_query_failed');
+
+    // Send user-friendly error message
+    await bot.sendMessage(chatId, getLocalizedMessage(lang, 'ai_error_fallback', MESSAGES), { parse_mode: 'Markdown' }).catch(e =>
+      logs('error', 'Failed to send AI error fallback message', { ChatID: chatId, Error: e.message })
+    );
   }
 };
 
@@ -138,8 +180,20 @@ module.exports = async (bot, msg) => {
       try {
         const { ttdl } = require('btch-downloader');
         logs('info', 'Fetching TikTok data from API...', { ...userInfo, URL: text.trim() });
-        const data = await ttdl(text.trim());
-        
+
+        // Use retry mechanism for TikTok downloads
+        const data = await retryWithBackoff(
+          async () => {
+            return await ttdl(text.trim());
+          },
+          MAX_DOWNLOAD_RETRIES,
+          2000, // 2 second base delay
+          'TikTok Download'
+        ).catch(err => {
+          logs('error', 'TikTok downloader failed after retries', { ...userInfo, Error: err.message });
+          throw err;
+        });
+
         // Log successful data retrieval
         logs('success', 'TikTok data retrieved successfully', {
           ...userInfo,
@@ -192,7 +246,9 @@ module.exports = async (bot, msg) => {
         if (downloadError.message.toLowerCase().includes('content not found')) {
             errorMessage = getLocalizedMessage(lang, 'content_not_found', MESSAGES);
         }
-        await bot.sendMessage(chatId, errorMessage, { parse_mode: 'Markdown' });
+        await bot.sendMessage(chatId, errorMessage, { parse_mode: 'Markdown' }).catch(e =>
+          logs('error', 'Failed to send download error message', { ChatID: chatId, Error: e.message })
+        );
       }
     } else if (text.startsWith('/')) {
       logs('info', '⚡ Command received', { ...userInfo, Command: text.split(' ')[0] });
@@ -205,18 +261,27 @@ module.exports = async (bot, msg) => {
         } else {
           logs('info', '🤖 AI query received', { ...userInfo, QueryLength: text.length, Language: lang });
           trackAIQuery();
-          await queryAI(bot, chatId, text, lang);
-          logs('success', '✅ AI response sent', userInfo);
+          await queryAI(bot, chatId, text, lang).catch(aiError => {
+            logs('error', 'Failed to process AI query', { ...userInfo, Error: aiError.message });
+            // Error already handled inside queryAI function
+          });
+          logs('success', '✅ AI response processing completed', userInfo);
         }
       } else {
         logs('info', '👥 Group message ignored (not TikTok URL)', { ...userInfo, Text: text.substring(0, 50) });
       }
     }
   } catch (error) {
-    logs('error', 'General message handling failed', { ChatID: chatId, Error: error.message });
+    logs('error', 'General message handling failed', {
+      ChatID: chatId,
+      Error: error.message,
+      Stack: error.stack?.substring(0, 300)
+    });
     if (processingMessageId) {
         await bot.deleteMessage(chatId, processingMessageId).catch(e => logs('warning', 'Failed to delete processing message on general error', { ChatID: chatId, Error: e.message }));
     }
-    await bot.sendMessage(chatId, getLocalizedMessage(lang, 'processing_error', MESSAGES), { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, getLocalizedMessage(lang, 'processing_error', MESSAGES), { parse_mode: 'Markdown' }).catch(e =>
+      logs('error', 'Failed to send general error message', { ChatID: chatId, Error: e.message })
+    );
   }
 };

@@ -83,7 +83,65 @@ bot.onText(/^\/stats$/, (msg) => statsCommand(bot, msg));
 bot.onText(/^\/broadcast/, (msg) => broadcastCommand(bot, msg));
 bot.onText(/^\/ban/, (msg) => banCommand(bot, msg));
 bot.onText(/^\/unban/, (msg) => unbanCommand(bot, msg));
-bot.on('polling_error', (error) => logs('error', 'Polling error occurred!', { Error: error.message }));
+
+// Enhanced polling error handler with auto-recovery
+let pollingErrorCount = 0;
+let lastPollingErrorTime = 0;
+const POLLING_ERROR_RESET_TIME = 60000; // Reset counter after 1 minute
+const MAX_POLLING_ERRORS_BEFORE_RESTART = 5;
+
+bot.on('polling_error', (error) => {
+  const now = Date.now();
+
+  // Reset counter if last error was more than 1 minute ago
+  if (now - lastPollingErrorTime > POLLING_ERROR_RESET_TIME) {
+    pollingErrorCount = 0;
+  }
+
+  pollingErrorCount++;
+  lastPollingErrorTime = now;
+
+  logs('error', 'Polling error occurred!', {
+    Error: error.message,
+    ErrorCode: error.code,
+    ErrorCount: pollingErrorCount,
+    LastError: new Date(lastPollingErrorTime).toISOString()
+  });
+
+  // Auto-restart polling if too many errors
+  if (pollingErrorCount >= MAX_POLLING_ERRORS_BEFORE_RESTART) {
+    logs('warning', `Too many polling errors (${pollingErrorCount}). Attempting to restart polling...`);
+
+    try {
+      bot.stopPolling();
+      logs('info', 'Stopped polling, will restart in 5 seconds...');
+
+      setTimeout(() => {
+        try {
+          bot.startPolling();
+          logs('success', 'Polling restarted successfully after errors.');
+          pollingErrorCount = 0; // Reset counter after successful restart
+        } catch (restartError) {
+          logs('error', 'Failed to restart polling', { Error: restartError.message });
+          logs('warning', 'Will retry again in 10 seconds...');
+
+          // Try one more time
+          setTimeout(() => {
+            try {
+              bot.startPolling();
+              logs('success', 'Polling restarted on second attempt.');
+              pollingErrorCount = 0;
+            } catch (finalError) {
+              logs('error', 'Failed to restart polling after multiple attempts', { Error: finalError.message });
+            }
+          }, 10000);
+        }
+      }, 5000);
+    } catch (stopError) {
+      logs('error', 'Failed to stop polling', { Error: stopError.message });
+    }
+  }
+});
 
 logs('success', 'Telegram bot instance created and listeners are attached.');
 

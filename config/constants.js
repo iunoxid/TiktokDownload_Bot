@@ -14,7 +14,18 @@ module.exports = {
   // Network timeouts
   DEFAULT_TIMEOUT: 30000, // 30 seconds
   AI_REQUEST_TIMEOUT: 30000, // 30 seconds
-  
+  DOWNLOAD_TIMEOUT: 60000, // 60 seconds for downloads
+
+  // Retry configuration
+  MAX_DOWNLOAD_RETRIES: 3, // Maximum retry attempts for downloads
+  RETRY_DELAY: 2000, // 2 seconds delay between retries
+  MAX_AI_RETRIES: 2, // Maximum retry attempts for AI queries
+
+  // Connection check
+  CONNECTION_CHECK_TIMEOUT: 5000, // 5 seconds
+  CONNECTION_CHECK_RETRIES: 5, // Check 5 times before giving up
+  CONNECTION_CHECK_DELAY: 3000, // 3 seconds between checks
+
   // Bot validation
   MIN_BOT_TOKEN_LENGTH: 10,
   
