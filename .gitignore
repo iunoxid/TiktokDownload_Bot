@@ -5,7 +5,7 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 .npm/
-.npmrc # Opsional, jika Anda menyimpan konfigurasi npm lokal yang sensitif
+.npmrc
 
 # Build artifacts
 dist/
@@ -20,22 +20,18 @@ build/
 .env.staging
 
 # Temporary files and directories
-tmp/ # Folder sementara yang kita gunakan untuk audio
+tmp/
 *.tmp
 *.sqlite
-.DS_Store # macOS specific
-Thumbs.db # Windows specific
-.vscode/ # Visual Studio Code settings (opsional, bisa di-commit jika tim menggunakannya)
+.DS_Store
+Thumbs.db
+.vscode/
 
 # Log files and directories
 *.log
 logs/
 log/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 lerna-debug.log*
-.npm
 .eslintcache
 
 # Runtime and process files
@@ -45,13 +41,13 @@ pids
 *.pid.lock
 
 # Data files - IMPORTANT: These contain user data and analytics
-data/data.json # File data persisten yang dibuat oleh bot
-data/analytics.json # Bot analytics and statistics
-data/*.json # All JSON data files
-data/backups/ # Data backups if any
+data/data.json
+data/analytics.json
+data/*.json
+data/backups/
 
 # IDE specific files
-.idea/ # IntelliJ IDEA specific
+.idea/
 *.sublime-project
 *.sublime-workspace
 
@@ -69,7 +65,7 @@ uploads/
 
 # Process management
 .PM2*
-ecosystem.config.js # PM2 config might contain sensitive info
+ecosystem.config.js
 process.json
 
 # Security and certificates
@@ -94,16 +90,10 @@ process.json
 
 # Coverage directory used by tools like istanbul
 coverage/
-nyc_output/
+.nyc_output/
 
 # Dependency directories
 jspm_packages/
-
-# Optional npm cache directory
-.npm
-
-# Optional eslint cache
-.eslintcache
 
 # Optional REPL history
 .node_repl_history
@@ -122,12 +112,6 @@ jspm_packages/
 # OS generated files
 .DS_Store?
 ehthumbs.db
-Thumbs.db
-
-# Editor files
-*~
-*.swp
-*.swo
 
 # Local configuration files that might contain secrets
 config/local.js
