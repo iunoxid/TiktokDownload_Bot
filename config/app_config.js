@@ -95,6 +95,7 @@ Nggak perlu ada kata-kata sebelum atau sesudah tautan ya!
 
 Yuk, kirim tautan TikTok-mu sekarang, khusus link-nya aja!`,
       processing: '⏳ Ngebut mode on! Sedang memproses tautan TikTok kamu nih... Sabar sebentar, ya!',
+      retrying_download: 'Mencoba lagi... (Percobaan {attempt}/{max})',
       processing_error: `
 💔 Aduh, Gagal Proses Linkmu! 💔
 Maaf banget, ada sedikit kendala nih saat saya memproses tautanmu. Mungkin ini penyebabnya:
@@ -209,6 +210,7 @@ No words before or after the link, alright?
 
 Go on, send your TikTok link now, just the link itself!`,
       processing: '⏳ Speed mode on! I’m currently processing your TikTok link... Hang tight for a moment!',
+      retrying_download: 'Retrying... (Attempt {attempt}/{max})',
       processing_error: `
 💔 Oops, Failed to Process Your Link! 💔
 So sorry, I ran into a snag while processing your link. Here's why it might have happened:

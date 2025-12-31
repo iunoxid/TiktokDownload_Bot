@@ -29,6 +29,26 @@ const sanitizeInput = (input) => {
   return input.replace(/[<>"'&]/g, '').substring(0, MAX_USER_INPUT_LENGTH).trim();
 };
 
+const formatRetryMessage = (lang, attempt, maxRetries) => {
+  const template = getLocalizedMessage(lang, 'retrying_download', MESSAGES);
+  return template.replace('{attempt}', attempt).replace('{max}', maxRetries);
+};
+
+const withTimeout = (promise, ms, label) => {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const err = new Error(`${label} timed out after ${ms}ms`);
+      err.code = 'ETIMEDOUT';
+      reject(err);
+    }, ms);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+};
+
 const queryAI = async (bot, chatId, userMessage, lang) => {
   if (!GROQ_API_KEY) {
     logs('error', 'Groq API Key is not set.', { ChatID: chatId });
@@ -181,14 +201,28 @@ module.exports = async (bot, msg) => {
         const { ttdl } = require('btch-downloader');
         logs('info', 'Fetching TikTok data from API...', { ...userInfo, URL: text.trim() });
 
-        // Use retry mechanism for TikTok downloads
+        // Use retry mechanism for TikTok downloads (retry even when content is not found)
         const data = await retryWithBackoff(
           async () => {
-            return await ttdl(text.trim());
+            const result = await withTimeout(ttdl(text.trim()), DOWNLOAD_TIMEOUT, 'TikTok Download');
+            if (!result || (!result.video && !result.audio)) {
+              const notFoundError = new Error('Content not found');
+              notFoundError.code = 'CONTENT_NOT_FOUND';
+              throw notFoundError;
+            }
+            return result;
           },
           MAX_DOWNLOAD_RETRIES,
           2000, // 2 second base delay
-          'TikTok Download'
+          'TikTok Download',
+          async ({ attempt, maxRetries }) => {
+            if (!processingMessageId) return;
+            const nextAttempt = Math.min(attempt + 1, maxRetries);
+            const retryText = formatRetryMessage(lang, nextAttempt, maxRetries);
+            await bot.editMessageText(retryText, { chat_id: chatId, message_id: processingMessageId }).catch(e =>
+              logs('warning', 'Failed to update retry message', { ChatID: chatId, Error: e.message })
+            );
+          }
         ).catch(err => {
           logs('error', 'TikTok downloader failed after retries', { ...userInfo, Error: err.message });
           throw err;
@@ -203,10 +237,6 @@ module.exports = async (bot, msg) => {
           Title: data.title ? data.title.substring(0, 50) + '...' : 'No title'
         });
 
-
-        if (!data || (!data.video && !data.audio)) {
-          throw new Error('Content not found');
-        }
 
         const isMultiPhoto = data.video && data.video.length > 1;
         const isSinglePhotoByUrl = data.video && data.video.length === 1 && (data.video[0].includes('photomode') || data.video[0].endsWith('.jpeg'));

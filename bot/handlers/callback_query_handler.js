@@ -1,5 +1,7 @@
 // bot/handlers/callback_query_handler.js
 const { logs, getLocalizedMessage } = require('../../utils/common_utils');
+const { MAX_DOWNLOAD_RETRIES, DOWNLOAD_TIMEOUT } = require('../../config/constants');
+const { retryWithBackoff } = require('../../utils/retry_utils');
 const { setUserLanguage, getUserLanguage, addUser } = require('../../data/data_store');
 const { trackUser, trackDownload, isUserBanned } = require('../../data/analytics_store');
 const { MESSAGES, ADMIN_CHAT_ID } = require('../../config/app_config');
@@ -9,6 +11,26 @@ const runtime = require('../commands/runtime');
 const { statsCommand, broadcastCommand, banCommand, unbanCommand } = require('../commands/admin');
 const { ttdl } = require('btch-downloader');
 const axios = require('axios');
+
+const formatRetryMessage = (lang, attempt, maxRetries) => {
+  const template = getLocalizedMessage(lang, 'retrying_download', MESSAGES);
+  return template.replace('{attempt}', attempt).replace('{max}', maxRetries);
+};
+
+const withTimeout = (promise, ms, label) => {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      const err = new Error(`${label} timed out after ${ms}ms`);
+      err.code = 'ETIMEDOUT';
+      reject(err);
+    }, ms);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeoutId) clearTimeout(timeoutId);
+  });
+};
 
 module.exports = async (bot, callbackQuery) => {
   const msg = callbackQuery.message;
@@ -68,36 +90,56 @@ module.exports = async (bot, callbackQuery) => {
       try {
         processingMsg = await bot.sendMessage(chatId, '⏳ Memproses ulang untuk audio, mohon tunggu...');
         
-        const tiktokData = await ttdl(tiktokUrl);
-        const audioUrl = (tiktokData.audio && typeof tiktokData.audio === 'string') ? tiktokData.audio : (Array.isArray(tiktokData.audio) && tiktokData.audio.length > 0) ? tiktokData.audio[0] : null;
+        const lang = getUserLanguage(chatId) || 'en';
+        const audioResult = await retryWithBackoff(
+          async () => {
+            const tiktokData = await withTimeout(ttdl(tiktokUrl), DOWNLOAD_TIMEOUT, 'TikTok Audio Download');
+            const audioUrl = (tiktokData.audio && typeof tiktokData.audio === 'string') ? tiktokData.audio : (Array.isArray(tiktokData.audio) && tiktokData.audio.length > 0) ? tiktokData.audio[0] : null;
 
-        if (audioUrl) {
-          logs('info', '⬇️ Downloading audio file', { ...userInfo, AudioURL: audioUrl.substring(0, 50) + '...' });
-          const response = await axios.get(audioUrl, { responseType: 'arraybuffer' });
-          const audioBuffer = Buffer.from(response.data, 'binary');
-          
-          // Create filename from audio title
-          let audioTitle = tiktokData.title_audio || 'audio_iuno_in';
-          const sanitizedFilename = audioTitle.replace(/[/\\?%*:|"<>]/g, '-') + '.mp3';
-          
-          // Send as document with custom filename
-          await bot.sendDocument(chatId, audioBuffer, {
-            caption: `Audio dari: ${tiktokData.title || ''}`
-          }, {
-            filename: sanitizedFilename,
-            contentType: 'audio/mpeg'
-          });
-          
-          await bot.deleteMessage(chatId, processingMsg.message_id);
-          trackDownload('audios', true);
-          logs('success', '🎵 Audio sent successfully', { 
-            ...userInfo, 
-            Filename: sanitizedFilename,
-            FileSize: audioBuffer.length
-          });
-        } else {
-          throw new Error('Audio URL not found on re-fetch.');
-        }
+            if (!audioUrl) {
+              throw new Error('Audio URL not found on re-fetch.');
+            }
+
+            logs('info', '????,? Downloading audio file', { ...userInfo, AudioURL: audioUrl.substring(0, 50) + '...' });
+            const response = await axios.get(audioUrl, { responseType: 'arraybuffer', timeout: DOWNLOAD_TIMEOUT });
+            const audioBuffer = Buffer.from(response.data, 'binary');
+
+            return { tiktokData, audioUrl, audioBuffer };
+          },
+          MAX_DOWNLOAD_RETRIES,
+          2000,
+          'TikTok Audio Download',
+          async ({ attempt, maxRetries }) => {
+            if (!processingMsg) return;
+            const nextAttempt = Math.min(attempt + 1, maxRetries);
+            const retryText = formatRetryMessage(lang, nextAttempt, maxRetries);
+            await bot.editMessageText(retryText, { chat_id: chatId, message_id: processingMsg.message_id }).catch(e =>
+              logs('warning', 'Failed to update retry message', { ChatID: chatId, Error: e.message })
+            );
+          }
+        );
+
+        const { tiktokData, audioBuffer } = audioResult;
+
+        // Create filename from audio title
+        let audioTitle = tiktokData.title_audio || 'audio_iuno_in';
+        const sanitizedFilename = audioTitle.replace(/[/\?%*:|"<>]/g, '-') + '.mp3';
+
+        // Send as document with custom filename
+        await bot.sendDocument(chatId, audioBuffer, {
+          caption: `Audio dari: ${tiktokData.title || ''}`
+        }, {
+          filename: sanitizedFilename,
+          contentType: 'audio/mpeg'
+        });
+
+        await bot.deleteMessage(chatId, processingMsg.message_id);
+        trackDownload('audios', true);
+        logs('success', 'dYZ? Audio sent successfully', { 
+          ...userInfo, 
+          Filename: sanitizedFilename,
+          FileSize: audioBuffer.length
+        });
 
       } catch (error) {
         logs('error', '❌ Audio download failed', {

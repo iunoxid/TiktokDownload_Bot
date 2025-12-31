@@ -1,6 +1,11 @@
 // config/constants.js
 // Application constants to avoid magic numbers
 
+const toInt = (value, fallback) => {
+  const parsed = parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 module.exports = {
   // Text length limits
   MAX_TITLE_LENGTH: 400,
@@ -17,8 +22,8 @@ module.exports = {
   DOWNLOAD_TIMEOUT: 60000, // 60 seconds for downloads
 
   // Retry configuration
-  MAX_DOWNLOAD_RETRIES: 3, // Maximum retry attempts for downloads
-  RETRY_DELAY: 2000, // 2 seconds delay between retries
+  MAX_DOWNLOAD_RETRIES: toInt(process.env.MAX_DOWNLOAD_RETRIES, 5), // Maximum retry attempts for downloads
+  RETRY_DELAY: toInt(process.env.RETRY_DELAY, 2000), // 2 seconds delay between retries
   MAX_AI_RETRIES: 2, // Maximum retry attempts for AI queries
 
   // Connection check

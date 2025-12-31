@@ -12,7 +12,7 @@ const { RETRY_DELAY } = require('../config/constants');
  * @param {String} operationName - Name of operation for logging
  * @returns {Promise} - Result of the function
  */
-async function retryWithBackoff(fn, maxRetries = 3, baseDelay = RETRY_DELAY, operationName = 'Operation') {
+async function retryWithBackoff(fn, maxRetries = 3, baseDelay = RETRY_DELAY, operationName = 'Operation', onRetry = null) {
   let lastError;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -52,6 +52,16 @@ async function retryWithBackoff(fn, maxRetries = 3, baseDelay = RETRY_DELAY, ope
           ErrorCode: error.code
         });
 
+        if (typeof onRetry === 'function') {
+          try {
+            await onRetry({ attempt, maxRetries, delay, error, operationName });
+          } catch (callbackError) {
+            logs('warning', `${operationName} onRetry callback failed`, {
+              Error: callbackError.message
+            });
+          }
+        }
+
         await sleep(delay);
       } else {
         logs('error', `${operationName} failed after ${maxRetries} attempts`, {
@@ -73,6 +83,10 @@ async function retryWithBackoff(fn, maxRetries = 3, baseDelay = RETRY_DELAY, ope
  * @returns {Boolean} - True if error is retryable
  */
 function isRetryableError(error) {
+  if (error.code === 'CONTENT_NOT_FOUND') {
+    return true;
+  }
+
   // Network errors
   const retryableCodes = [
     'ECONNRESET',
@@ -125,6 +139,10 @@ function isRetryableError(error) {
   ];
 
   if (networkKeywords.some(keyword => errorMessage.includes(keyword))) {
+    return true;
+  }
+
+  if (errorMessage.includes('content not found')) {
     return true;
   }
 
